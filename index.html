@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10131c">
+  <title>ORANGE — Remote Display</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10131c;
+      --panel: #191e2b;
+      --panel2: #202738;
+      --text: #f2f4fa;
+      --muted: #a5afc2;
+      --line: #30394c;
+      --accent: #ff9d32;
+      --green: #55d69a;
+      --red: #ff7070;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    main { width: min(920px, calc(100% - 32px)); margin: 42px auto; }
+    header { margin-bottom: 26px; }
+    .eyebrow { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .16em; }
+    h1 { margin: 5px 0; font-size: clamp(30px, 5vw, 44px); letter-spacing: -.04em; }
+    .sub, .hint { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    section {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+      padding: 20px; min-width: 0;
+    }
+    section.wide { grid-column: 1 / -1; }
+    h2 { font-size: 17px; margin: 0 0 14px; }
+    label { display: block; margin: 12px 0 6px; color: var(--muted); font-size: 13px; }
+    input[type="text"], input[type="password"], input[type="url"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px;
+      background: var(--bg); color: var(--text); font: inherit;
+    }
+    input[type="file"] { display: block; max-width: 100%; margin: 10px 0; color: var(--muted); }
+    button {
+      border: 0; border-radius: 9px; padding: 10px 15px; color: #18130d;
+      background: var(--accent); font: inherit; font-weight: 750; cursor: pointer;
+    }
+    button.secondary { color: var(--text); background: var(--panel2); border: 1px solid var(--line); }
+    button.danger { color: white; background: #a83d45; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .statusline { display: flex; align-items: center; gap: 9px; margin: 8px 0; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #818b9c; }
+    .dot.good { background: var(--green); box-shadow: 0 0 12px #55d69a66; }
+    .dot.bad { background: var(--red); }
+    .preview {
+      display: grid; place-items: center; min-height: 190px; overflow: hidden;
+      border: 1px dashed var(--line); border-radius: 12px; background: #111722;
+      color: var(--muted); margin-top: 12px;
+    }
+    .preview img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; }
+    .notice {
+      margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+      background: #2a241b; color: #f4d4a8; font-size: 13px;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    #log {
+      min-height: 76px; max-height: 170px; overflow: auto; padding: 10px;
+      background: #0c1018; border: 1px solid var(--line); border-radius: 9px;
+      color: #c1cad9; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } section.wide { grid-column: auto; } main { margin: 24px auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">ORANGE / LOCAL REMOTE DISPLAY</div>
+    <h1>Control dashboard</h1>
+    <div class="sub">Send an image to a paired device on your network, with the device user's approval.</div>
+  </header>
+
+  <div class="grid">
+    <section>
+      <h2>1. Connect to your server</h2>
+      <label for="serverUrl">Secure WebSocket address</label>
+      <input id="serverUrl" type="url" placeholder="wss://your-server-address:port/ws" autocomplete="url">
+      <label for="token">Access token</label>
+      <input id="token" type="password" placeholder="Enter the token configured on your Python server" autocomplete="off">
+      <div class="actions">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+      </div>
+      <div class="statusline" style="margin-top:16px">
+        <span id="connectionDot" class="dot"></span>
+        <strong id="connectionText">Not connected</strong>
+      </div>
+      <div class="statusline">
+        <span id="consentDot" class="dot"></span>
+        <span id="consentText">Device approval: not received</span>
+      </div>
+      <p class="small">The iPad must be paired and the person using it must approve the display session on the iPad.</p>
+    </section>
+
+    <section>
+      <h2>2. Choose a PNG</h2>
+      <label for="imageFile">Image file</label>
+      <input id="imageFile" type="file" accept="image/png">
+      <div id="preview" class="preview">PNG preview appears here</div>
+      <p id="fileInfo" class="small">PNG only · Maximum 4 MB</p>
+    </section>
+
+    <section class="wide">
+      <h2>3. Control the approved display</h2>
+      <div class="actions">
+        <button id="showBtn" disabled>Show image on iPad</button>
+        <button id="hideBtn" class="danger" disabled>Dismiss image</button>
+      </div>
+      <div class="notice">
+        This dashboard does not lock the iPad or prevent the user from leaving the page.
+        The iPad client should always provide its own visible close button.
+      </div>
+    </section>
+
+    <section class="wide">
+      <h2>Activity</h2>
+      <div id="log" aria-live="polite">Dashboard ready. Connect to your Python server to begin.</div>
+    </section>
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const serverUrl = $("serverUrl");
+  const tokenInput = $("token");
+  const connectBtn = $("connectBtn");
+  const disconnectBtn = $("disconnectBtn");
+  const showBtn = $("showBtn");
+  const hideBtn = $("hideBtn");
+  const imageFile = $("imageFile");
+  const preview = $("preview");
+  const fileInfo = $("fileInfo");
+  const logBox = $("log");
+
+  let socket = null;
+  let imageDataUrl = null;
+  let imageName = "";
+  let approved = false;
+
+  function log(message) {
+    const stamp = new Date().toLocaleTimeString();
+    logBox.textContent += `\n[${stamp}] ${message}`;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function setConnection(connected) {
+    $("connectionDot").className = "dot" + (connected ? " good" : "");
+    $("connectionText").textContent = connected ? "Connected to server" : "Not connected";
+    connectBtn.disabled = connected;
+    disconnectBtn.disabled = !connected;
+    updateControls();
+  }
+
+  function setApproval(value) {
+    approved = value === true;
+    $("consentDot").className = "dot" + (approved ? " good" : "");
+    $("consentText").textContent = approved ? "Device approval: granted" : "Device approval: not granted";
+    updateControls();
+  }
+
+  function updateControls() {
+    const connected = socket && socket.readyState === WebSocket.OPEN;
+    showBtn.disabled = !(connected && approved && imageDataUrl);
+    hideBtn.disabled = !(connected && approved);
+  }
+
+  function send(payload) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      log("Not connected.");
+      return false;
+    }
+    socket.send(JSON.stringify(payload));
+    return true;
+  }
+
+  connectBtn.addEventListener("click", () => {
+    const url = serverUrl.value.trim();
+    const token = tokenInput.value;
+    if (!url || !token) {
+      log("Enter the secure WebSocket address and access token.");
+      return;
+    }
+    if (!url.startsWith("wss://")) {
+      log("For a GitHub Pages HTTPS site, the server address must use wss://.");
+      return;
+    }
+
+    try {
+      socket = new WebSocket(url);
+    } catch (error) {
+      log("Could not create WebSocket: " + error.message);
+      return;
+    }
+
+    socket.addEventListener("open", () => {
+      setConnection(true);
+      setApproval(false);
+      send({ type: "authenticate", token });
+      log("Connected. Authenticating with server…");
+    });
+
+    socket.addEventListener("message", (event) => {
+      let message;
+      try { message = JSON.parse(event.data); }
+      catch { log("Ignored a non-JSON server message."); return; }
+
+      switch (message.type) {
+        case "authenticated":
+          log("Server authentication accepted. Waiting for iPad approval.");
+          break;
+        case "authentication_failed":
+          log("Server rejected the access token.");
+          setApproval(false);
+          break;
+        case "device_connected":
+          log("Paired iPad connected.");
+          break;
+        case "consent_granted":
+          setApproval(true);
+          log("The iPad user approved this display session.");
+          break;
+        case "consent_revoked":
+          setApproval(false);
+          log("The iPad user revoked permission.");
+          break;
+        case "device_disconnected":
+          setApproval(false);
+          log("The iPad disconnected.");
+          break;
+        case "display_shown":
+          log("Display request delivered.");
+          break;
+        case "display_hidden":
+          log("Dismiss request delivered.");
+          break;
+        case "error":
+          log("Server: " + (message.message || "Unknown error"));
+          break;
+        default:
+          log("Server message: " + message.type);
+      }
+      updateControls();
+    });
+
+    socket.addEventListener("close", () => {
+      setConnection(false);
+      setApproval(false);
+      socket = null;
+      log("Connection closed.");
+    });
+
+    socket.addEventListener("error", () => {
+      log("WebSocket error. Check the address, certificate, server, and network.");
+    });
+  });
+
+  disconnectBtn.addEventListener("click", () => {
+    if (socket) socket.close(1000, "Dashboard disconnected");
+  });
+
+  imageFile.addEventListener("change", () => {
+    const file = imageFile.files && imageFile.files[0];
+    imageDataUrl = null;
+    imageName = "";
+    preview.textContent = "PNG preview appears here";
+    if (!file) { updateControls(); return; }
+
+    if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
+      fileInfo.textContent = "Please choose a PNG file.";
+      imageFile.value = "";
+      updateControls();
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      fileInfo.textContent = "That file is larger than 4 MB. Choose a smaller PNG.";
+      imageFile.value = "";
+      updateControls();
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      imageDataUrl = String(reader.result);
+      imageName = file.name;
+      const img = document.createElement("img");
+      img.src = imageDataUrl;
+      img.alt = "Selected PNG preview";
+      preview.replaceChildren(img);
+      fileInfo.textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+      log("Selected " + file.name + ".");
+      updateControls();
+    };
+    reader.onerror = () => {
+      fileInfo.textContent = "Could not read that file.";
+      updateControls();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  showBtn.addEventListener("click", () => {
+    if (!approved || !imageDataUrl) return;
+    if (send({ type: "show_image", name: imageName, data_url: imageDataUrl })) {
+      log("Sent display request for " + imageName + ".");
+    }
+  });
+
+  hideBtn.addEventListener("click", () => {
+    if (!approved) return;
+    if (send({ type: "hide_image" })) log("Sent dismiss request.");
+  });
+
+  setConnection(false);
+  setApproval(false);
+})();
+</script>
+</body>
+</html>
